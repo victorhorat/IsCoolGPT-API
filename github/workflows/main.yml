@@ -1,21 +1,22 @@
 name: CI/CD Pipeline - Build & Push to AWS ECR
 
-# Gatilho: Executa o pipeline sempre que houver um push para a branch 'main'
+# Gatilho: Executa o pipeline sempre que houver um push para a branch 'master'
 on:
   push:
     branches:
-      - main
+      - master
   # Permite que o pipeline seja executado manualmente
   workflow_dispatch:
 
 env:
-  # Variáveis de ambiente definidas globalmente
+  # Variáveis de ambiente
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: iscool-gpt-api # Nome do repositório no ECR
+  ECR_REPOSITORY: iscool-gpt-api # Nome do seu repositório ECR
   IMAGE_TAG: ${{ github.sha }} # Usa o hash do commit como tag da imagem para unicidade
 
 jobs:
   build_and_push:
+    # O pipeline roda em um ambiente Linux (ubuntu)
     runs-on: ubuntu-latest
     
     steps:
@@ -33,36 +34,35 @@ jobs:
 
       # 3. Login no AWS ECR (Docker)
       - name: Login to AWS ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      # 4. Definir URL completa do ECR
-      - name: Set ECR URL
-        id: ecr_url
-        run: echo "ECR_URL=$(echo $ECR_REPOSITORY_URI | sed 's|^https://||; s|/.*||')" >> $GITHUB_ENV
-        env:
-          ECR_REPOSITORY_URI: ${{ secrets.ECR_REPOSITORY_URI }}
-
-      # 5. Build da Imagem Docker
+        id: login-ecr
+        
+      # 4. Build e Tag da Imagem Docker
       - name: Build and Tag Docker Image
+        id: build-image
         run: |
-          # Define a tag completa da imagem
-          IMAGE_URI="${{ env.ECR_URL }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+          # 1234567890.dkr.ecr.us-east-1.amazonaws.com/iscool-gpt-api
+          ECR_URI=${{ secrets.ECR_REPOSITORY_URI }}
           
-          # Realiza o build usando o Dockerfile na raiz do projeto
+          # Define a tag completa da imagem
+          IMAGE_URI="$ECR_URI:${{ env.IMAGE_TAG }}"
+          
+          # Realiza o build (usando o Dockerfile que você já validou)
           docker build -t $IMAGE_URI .
           
           # Salva a URI da imagem para uso no próximo passo (Push)
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
           
-      # 6. Push da Imagem para o ECR
+      # 5. Push da Imagem para o ECR
       - name: Push Docker Image to ECR
         run: |
+          echo "Pushing image: ${{ env.IMAGE_URI }}"
           docker push ${{ env.IMAGE_URI }}
           echo "Successfully pushed image: ${{ env.IMAGE_URI }}"
           
-      # 7. (Opcional - Fase 3) Criar variável de ambiente para o próximo step de Deploy no ECS/Fargate
-      # Esta variável será usada na próxima fase
-      - name: Output Image Tag
+      # 6. (Próxima Fase) Exporta a URI da imagem para uso em um possível step de deploy ECS
+      - name: Output Image URI
         id: output_image
-        run: echo "image=${{ env.IMAGE_URI }}" >> $GITHUB_OUTPUT
+        outputs:
+          image: ${{ env.IMAGE_URI }}
+        run: echo "image_uri=${{ env.IMAGE_URI }}" >> $GITHUB_OUTPUT
