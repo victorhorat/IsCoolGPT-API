@@ -5,22 +5,22 @@ on:
   push:
     branches:
       - master
-  # Permite que o pipeline seja executado manualmente
   workflow_dispatch:
 
 env:
-  # Variáveis de ambiente
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: iscool-gpt-api # Nome do seu repositório ECR
-  IMAGE_TAG: ${{ github.sha }} # Usa o hash do commit como tag da imagem para unicidade
+  ECR_REPOSITORY: iscool-gpt-api
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build_and_push:
-    # O pipeline roda em um ambiente Linux (ubuntu)
     runs-on: ubuntu-latest
     
+    # 1. SAÍDAS DO JOB: Define quais variáveis este job irá exportar para outros jobs (como o de deploy)
+    outputs:
+      image_uri: ${{ steps.output_image.outputs.image_uri }} # Puxa a saída real do Step 6
+    
     steps:
-      # 1. Checkout do código
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -41,16 +41,12 @@ jobs:
       - name: Build and Tag Docker Image
         id: build-image
         run: |
-          # 1234567890.dkr.ecr.us-east-1.amazonaws.com/iscool-gpt-api
           ECR_URI=${{ secrets.ECR_REPOSITORY_URI }}
-          
-          # Define a tag completa da imagem
           IMAGE_URI="$ECR_URI:${{ env.IMAGE_TAG }}"
           
-          # Realiza o build (usando o Dockerfile que você já validou)
           docker build -t $IMAGE_URI .
           
-          # Salva a URI da imagem para uso no próximo passo (Push)
+          # Salva a URI da imagem como variável de ambiente para uso no próximo passo
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
           
       # 5. Push da Imagem para o ECR
@@ -60,9 +56,8 @@ jobs:
           docker push ${{ env.IMAGE_URI }}
           echo "Successfully pushed image: ${{ env.IMAGE_URI }}"
           
-      # 6. (Próxima Fase) Exporta a URI da imagem para uso em um possível step de deploy ECS
+      # 6. (CORRIGIDO) Exporta a URI da imagem para uso em outros Jobs
+      # Usa $GITHUB_OUTPUT para definir a saída 'image_uri' do Step 6
       - name: Output Image URI
         id: output_image
-        outputs:
-          image: ${{ env.IMAGE_URI }}
         run: echo "image_uri=${{ env.IMAGE_URI }}" >> $GITHUB_OUTPUT
