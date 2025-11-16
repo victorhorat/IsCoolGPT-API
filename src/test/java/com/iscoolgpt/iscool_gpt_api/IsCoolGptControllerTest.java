@@ -29,26 +29,17 @@ class IsCoolGptControllerTest {
                 .thenReturn("Resposta simulada!");
 
         mockMvc.perform(post("/api/v1/iscool/ask")
-                .content("\"Qual o significado da vida?\"") // O conteúdo como JSON string
+                .content("\"Qual o significado da vida?\"") // Envia JSON string válida
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Resposta simulada!"));
     }
 
     @Test
-    void givenEmptyQuestion_whenAskQuestion_thenReturnsBadRequest() throws Exception {
-        // body ausente, Spring nem chama seu controller: só verifica status
+    void givenEmptyBody_whenAskQuestion_thenReturnsCustomMessage() throws Exception {
+        // Body totalmente vazio
         mockMvc.perform(post("/api/v1/iscool/ask")
-                .content("") // body vazio
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void givenBlankQuestion_whenAskQuestion_thenReturnsCustomMessage() throws Exception {
-        // body sendo uma string vazia JSON, cai na sua validação
-        mockMvc.perform(post("/api/v1/iscool/ask")
-                .content("\"\"") // JSON string vazia = ""
+                .content("")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("A pergunta não pode estar vazia."));

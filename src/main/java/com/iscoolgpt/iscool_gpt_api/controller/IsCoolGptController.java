@@ -18,14 +18,12 @@ public class IsCoolGptController {
 
     // Endpoint principal do assistente
     @PostMapping("/ask")
-    public ResponseEntity<String> askQuestion(@RequestBody String question) {
+    public ResponseEntity<String> askQuestion(@RequestBody(required = false) String question) {
         if (question == null || question.trim().isEmpty()) {
             return ResponseEntity.badRequest().body("A pergunta não pode estar vazia.");
         }
-
-        // Chama o serviço LLM para processar a pergunta
         String answer = llmService.generateResponse(question);
-
         return ResponseEntity.ok(answer);
     }
+
 }
