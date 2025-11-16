@@ -15,11 +15,12 @@ env:
   CONTAINER_NAME: iscool-gpt-api
 
 jobs:
+
   build_and_push:
     runs-on: ubuntu-latest
 
     outputs:
-      image_uri: ${{ steps.build_push_image.outputs.image_uri }}
+      image_uri: ${{ steps.export_image.outputs.image_uri }}
 
     steps:
       - name: Checkout repository
@@ -42,28 +43,31 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to AWS ECR
-        uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, Tag, Push, and Output Image URI
-        id: build_push_image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Build, Tag & Push Image
         run: |
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
 
-          echo "Building image $IMAGE_URI"
-          docker build -t $IMAGE_URI .
+          echo "Building image: $IMAGE_URI"
+          docker build -t "$IMAGE_URI" .
 
-          echo "Pushing image"
-          docker push $IMAGE_URI
+          echo "Pushing image..."
+          docker push "$IMAGE_URI"
 
-          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-          echo "IMAGE_URI OUTPUT = $IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> image.txt
+        shell: bash
+
+      - name: Export Image URI
+        id: export_image
+        run: |
+          IMAGE_URI=$(cat image.txt)
+          echo "Image URI is: $IMAGE_URI"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
 
       - name: Debug Image URI
-        run: echo "IMAGE URI = ${{ steps.build_push_image.outputs.image_uri }}"
+        run: echo "IMAGE URI (OUTPUT) = ${{ steps.export_image.outputs.image_uri }}"
 
   deploy_to_ecs:
     runs-on: ubuntu-latest
