@@ -7,7 +7,6 @@ on:
   workflow_dispatch:
 
 env:
-  # Definindo variáveis globais
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: iscool-gpt-api
   ECS_CLUSTER: iscool-gpt-cluster
@@ -18,89 +17,78 @@ env:
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
-    
-    # 1. SAÍDAS DO JOB: Exporta a URI da imagem para o Job de Deploy
+
     outputs:
-      image_uri: ${{ steps.build_push_image.outputs.image_uri }} 
-    
+      image_uri: ${{ steps.build_push_image.outputs.image_uri }}
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. Configurar o JDK e Rodar Testes (CI)
-      - name: Set up JDK 21
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Dando permissão de execução para mvnw
-        run: chmod +x mvnw
-      - name: Run Unit Tests
-        run: ./mvnw test -Dmaven.test.failure.ignore=true # Ignora falhas de teste para permitir o deploy
-        
-      # 2. Configurar Credenciais AWS
-      - name: Configure AWS Credentials
+
+      - run: chmod +x mvnw
+      - run: ./mvnw test -Dmaven.test.failure.ignore=true
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 3. Login no ECR
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
-        
-      # 4. Build, Push e Output (UNIFICADO e CORRIGIDO)
+
       - name: Build, Tag, Push, and Output Image URI
-        id: build_push_image # ID Referenciado em 'outputs'
+        id: build_push_image
         env:
-          # Puxa o URI do ECR do step anterior (login-ecr)
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Constrói o URI completo (ex: 1234.dkr.ecr.us-east-1.amazonaws.com/iscool-gpt-api:sha)
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          
-          # Build e Push
+
+          echo "Building image $IMAGE_URI"
           docker build -t $IMAGE_URI .
+
+          echo "Pushing image"
           docker push $IMAGE_URI
-          
-          echo "Successfully pushed image: $IMAGE_URI"
-          
-          # Define o output do step (que é puxado pelo job.outputs)
+
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
-          
+          echo "IMAGE_URI OUTPUT = $IMAGE_URI"
+
+      - name: Debug Image URI
+        run: echo "IMAGE URI = ${{ steps.build_push_image.outputs.image_uri }}"
 
   deploy_to_ecs:
-    name: Deploy to Amazon ECS
-    needs: build_and_push # Depende do sucesso do job de build/push
     runs-on: ubuntu-latest
+    needs: build_and_push
     environment: production
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
 
-      # 1. Configurar Credenciais AWS
-      - name: Configure AWS Credentials
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-      
-      # 2. Atualizar o Task Definition com o novo URI da imagem
+
       - name: Render Task Definition
         id: task_definition
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: ${{ env.ECS_TASK_DEFINITION }}
           container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ needs.build_and_push.outputs.image_uri }} # Puxa o valor do Job anterior
+          image: ${{ needs.build_and_push.outputs.image_uri }}
 
-      # 3. Deploy para o Serviço ECS (CD)
-      - name: Deploy to ECS service
+      - name: Deploy to ECS Service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.task_definition.outputs.task-definition }}
