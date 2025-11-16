@@ -29,7 +29,7 @@
                 "logDriver": "awslogs",
                 "options": {
                     "awslogs-group": "/ecs/iscool-gpt-task-definition",
-                    "awslogs-region": "SUA_REGION",
+                    "awslogs-region": "sa-east-1",
                     "awslogs-stream-prefix": "ecs"
                 }
             }
