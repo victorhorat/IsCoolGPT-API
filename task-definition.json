@@ -1,0 +1,38 @@
+{
+    "family": "iscool-gpt-task-definition",
+    "networkMode": "awsvpc",
+    "cpu": "256",
+    "memory": "512",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "executionRoleArn": "arn:aws:iam::541779335221:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+        {
+            "name": "iscool-gpt-api",
+            "image": "REPLACE_IMAGE_URI",
+            "portMappings": [
+                {
+                    "containerPort": 8080,
+                    "hostPort": 8080,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "LLM_API_KEY",
+                    "value": "AIzaSyAlGqlllUI84BfWY6bt06HvG_6rirvdbDk" 
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/iscool-gpt-task-definition",
+                    "awslogs-region": "SUA_REGION",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}

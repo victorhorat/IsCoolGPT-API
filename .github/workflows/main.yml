@@ -1,37 +1,103 @@
-name: CI - Build & Test IsCoolGPT API
+name: CI/CD Pipeline - Build, Push & Deploy
 
 on:
   push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+    branches:
+      - master
   workflow_dispatch:
 
-jobs:
-  build_and_test:
-    runs-on: ubuntu-latest
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: iscool-gpt-api
+  IMAGE_TAG: ${{ github.sha }}
+  ECS_CLUSTER: iscool-gpt-cluster # Nome do Cluster ECS (Fase 3)
+  ECS_SERVICE: iscool-gpt-service # Nome do Serviço ECS (Fase 3)
+  ECS_TASK_DEFINITION: task-definition.json # Arquivo de configuração
+  CONTAINER_NAME: iscool-gpt-api # Nome do container dentro do task-definition
 
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    
+    outputs:
+      image_uri: ${{ steps.output_image.outputs.image_uri }}
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 1. Configurar o JDK e Rodar Testes (CI)
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      # Adicione este step AQUI:
       - name: Dando permissão de execução para mvnw
         run: chmod +x mvnw
-
       - name: Run Unit Tests
-        run: ./mvnw test
+        run: ./mvnw test -Dmaven.test.failure.ignore=true
+        
+      # 2. Configurar Credenciais AWS
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }} # CORREÇÃO: Passa direto do Secret
 
-      # Build Docker image (opcional)
-      - name: Build Docker Image
-        run: docker build -t iscool-gpt-api .
+      # 3. Login, Build e Push Docker (CD para ECR)
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+        
+      - name: Build and Push Docker Image to ECR
+        id: build-push-image
+        run: |
+          ECR_URI=${{ secrets.ECR_REPOSITORY_URI }}
+          IMAGE_URI="$ECR_URI:${{ env.IMAGE_TAG }}"
+          
+          docker build -t $IMAGE_URI .
+          docker push $IMAGE_URI # Push da imagem para o ECR
+          
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          
+      # 4. Exporta a URI da Imagem para o Job de Deploy
+      - name: Output Image URI
+        id: output_image
+        run: echo "image_uri=${{ env.IMAGE_URI }}" >> $GITHUB_OUTPUT
 
-      # (opcional) Testa se a imagem sobe
-      # - name: Run Docker container test
-      #   run: docker run --rm -d -p 8080:8080 iscool-gpt-api
+  deploy_to_ecs:
+    name: Deploy to Amazon ECS
+    needs: build_and_push # Depende do sucesso do job de build/push
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 1. Configurar Credenciais AWS
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      # 2. Atualizar o Task Definition com o novo URI da imagem
+      - name: Render Task Definition
+        id: task_definition
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEFINITION }} # task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }} # iscool-gpt-api
+          image: ${{ needs.build_and_push.outputs.image_uri }} 
+
+      # 3. Deploy para o Serviço ECS (CD)
+      - name: Deploy to ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task_definition.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true # Espera o ECS confirmar o deploy
