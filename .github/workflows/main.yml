@@ -21,14 +21,17 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # Adicione este step AQUI:
+      - name: Dando permissão de execução para mvnw
+        run: chmod +x mvnw
+
       - name: Run Unit Tests
         run: ./mvnw test
 
-      # Build Docker image (opcional, só se quiser garantir que o build funciona no CI)
+      # Build Docker image (opcional)
       - name: Build Docker Image
         run: docker build -t iscool-gpt-api .
 
       # (opcional) Testa se a imagem sobe
       # - name: Run Docker container test
       #   run: docker run --rm -d -p 8080:8080 iscool-gpt-api
-
