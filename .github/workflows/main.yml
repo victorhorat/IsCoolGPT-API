@@ -10,17 +10,18 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: iscool-gpt-api
   IMAGE_TAG: ${{ github.sha }}
-  ECS_CLUSTER: iscool-gpt-cluster # Nome do Cluster ECS (Fase 3)
-  ECS_SERVICE: iscool-gpt-service # Nome do Serviço ECS (Fase 3)
-  ECS_TASK_DEFINITION: task-definition.json # Arquivo de configuração
-  CONTAINER_NAME: iscool-gpt-api # Nome do container dentro do task-definition
+  ECS_CLUSTER: iscool-gpt-cluster
+  ECS_SERVICE: iscool-gpt-service
+  ECS_TASK_DEFINITION: task-definition.json
+  CONTAINER_NAME: iscool-gpt-api
 
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
     
+    # 1. SAÍDAS DO JOB: Exporta a URI da imagem para o Job de Deploy
     outputs:
-      image_uri: ${{ steps.output_image.outputs.image_uri }}
+      image_uri: ${{ steps.build-push-image-tag.outputs.image_uri }} 
     
     steps:
       - name: Checkout Repository
@@ -43,28 +44,27 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }} # CORREÇÃO: Passa direto do Secret
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      # 3. Login, Build e Push Docker (CD para ECR)
+      # 3. Login no ECR
       - name: Login to AWS ECR
         uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
         
-      - name: Build and Push Docker Image to ECR
-        id: build-push-image
+      # 4. Build, Push e Output (UNIFICADO)
+      - name: Build and Push Image
+        id: build-push-image-tag # ID Referenciado em 'outputs'
         run: |
           ECR_URI=${{ secrets.ECR_REPOSITORY_URI }}
           IMAGE_URI="$ECR_URI:${{ env.IMAGE_TAG }}"
           
           docker build -t $IMAGE_URI .
-          docker push $IMAGE_URI # Push da imagem para o ECR
+          docker push $IMAGE_URI
           
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          echo "Successfully pushed image: $IMAGE_URI"
+          # Define o output do step (que é puxado pelo job.outputs)
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
           
-      # 4. Exporta a URI da Imagem para o Job de Deploy
-      - name: Output Image URI
-        id: output_image
-        run: echo "image_uri=${{ env.IMAGE_URI }}" >> $GITHUB_OUTPUT
 
   deploy_to_ecs:
     name: Deploy to Amazon ECS
@@ -76,7 +76,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 1. Configurar Credenciais AWS
+      # 1. Configurar Credenciais AWS (novamente para o novo Job)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -89,8 +89,8 @@ jobs:
         id: task_definition
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }} # task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }} # iscool-gpt-api
+          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ needs.build_and_push.outputs.image_uri }} 
 
       # 3. Deploy para o Serviço ECS (CD)
@@ -100,4 +100,4 @@ jobs:
           task-definition: ${{ steps.task_definition.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true # Espera o ECS confirmar o deploy
+          wait-for-service-stability: true
