@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 env:
+  # Definindo variáveis globais
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: iscool-gpt-api
-  IMAGE_TAG: ${{ github.sha }}
   ECS_CLUSTER: iscool-gpt-cluster
   ECS_SERVICE: iscool-gpt-service
   ECS_TASK_DEFINITION: task-definition.json
@@ -21,7 +21,7 @@ jobs:
     
     # 1. SAÍDAS DO JOB: Exporta a URI da imagem para o Job de Deploy
     outputs:
-      image_uri: ${{ steps.build-push-image-tag.outputs.image_uri }} 
+      image_uri: ${{ steps.build_push_image.outputs.image_uri }} 
     
     steps:
       - name: Checkout Repository
@@ -36,7 +36,7 @@ jobs:
       - name: Dando permissão de execução para mvnw
         run: chmod +x mvnw
       - name: Run Unit Tests
-        run: ./mvnw test -Dmaven.test.failure.ignore=true
+        run: ./mvnw test -Dmaven.test.failure.ignore=true # Ignora falhas de teste para permitir o deploy
         
       # 2. Configurar Credenciais AWS
       - name: Configure AWS Credentials
@@ -51,17 +51,23 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
         
-      # 4. Build, Push e Output (UNIFICADO)
-      - name: Build and Push Image
-        id: build-push-image-tag # ID Referenciado em 'outputs'
+      # 4. Build, Push e Output (UNIFICADO e CORRIGIDO)
+      - name: Build, Tag, Push, and Output Image URI
+        id: build_push_image # ID Referenciado em 'outputs'
+        env:
+          # Puxa o URI do ECR do step anterior (login-ecr)
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          ECR_URI=${{ secrets.ECR_REPOSITORY_URI }}
-          IMAGE_URI="$ECR_URI:${{ env.IMAGE_TAG }}"
+          # Constrói o URI completo (ex: 1234.dkr.ecr.us-east-1.amazonaws.com/iscool-gpt-api:sha)
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           
+          # Build e Push
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
           
           echo "Successfully pushed image: $IMAGE_URI"
+          
           # Define o output do step (que é puxado pelo job.outputs)
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
           
@@ -76,7 +82,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 1. Configurar Credenciais AWS (novamente para o novo Job)
+      # 1. Configurar Credenciais AWS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -91,7 +97,7 @@ jobs:
         with:
           task-definition: ${{ env.ECS_TASK_DEFINITION }}
           container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ needs.build_and_push.outputs.image_uri }} 
+          image: ${{ needs.build_and_push.outputs.image_uri }} # Puxa o valor do Job anterior
 
       # 3. Deploy para o Serviço ECS (CD)
       - name: Deploy to ECS service
