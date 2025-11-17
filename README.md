@@ -19,24 +19,39 @@ A solução foi implementada como uma API RESTful, utilizando uma arquitetura se
 ## 2. Diagrama de Arquitetura do Sistema
 
 **Fluxo do Usuário (Aplicação):**
-```
-Estudante → (1) Pergunta (Texto) → API Java Spring Boot (AWS ECS Fargate)
-API → (2) Envia Prompt (JSON) → Google Gemini API
-Gemini API → (3) Retorna Resposta (JSON) → API
-API → (4) Resposta (String) → Estudante
+
+```mermaid
+flowchart LR
+    A[Estudante] -->|1. Pergunta Texto| B[API Spring Boot - ECS Fargate]
+    B -->|2. Prompt JSON| C[Google Gemini API]
+    C -->|3. Resposta JSON| B
+    B -->|4. Resposta Texto| A
+
+    subgraph Infraestrutura AWS
+        B
+        D[ECR - Registro de Imagens]
+        E[CloudWatch Logs]
+    end
+
+    B --> E
 ```
 
+
+
+
 **Fluxo de DevOps (CI/CD):**
+```mermaid
+flowchart TD
+    A[Desenvolvedor] -->|1. git push master| B[GitHub Repositorio]
+    B -->|2. Aciona Pipeline| C[GitHub Actions CICD]
+    C -->|3. Roda Testes Maven| D[Testes Automatizados]
+    C -->|4. Build e Push da Imagem| E[AWS ECR Registro de Imagens]
+    C -->|5. Atualiza Servico ECS| F[AWS ECS Deploy]
+    F -->|6. Puxa Imagem| E
+    F -->|7. Roda Nova Task| G[AWS Fargate]
+    G -->|8. Envia Logs| H[CloudWatch Logs]
 ```
-Desenvolvedor → (1) git push (master) → GitHub (Repositório)
-GitHub → (2) Aciona Pipeline → GitHub Actions (CI/CD)
-Actions → (3) Roda Testes → Maven Test
-Actions → (4) Build & Push da Imagem → AWS ECR (Registro de Imagem)
-Actions → (5) Atualiza Serviço → AWS ECS (Dispara Deploy)
-ECS → (6) Puxa Imagem → AWS ECR
-ECS → (7) Roda Nova Task → AWS Fargate
-Fargate → (8) Envia Logs → CloudWatch Logs (Monitoramento)
-```
+
 
 ***
 
