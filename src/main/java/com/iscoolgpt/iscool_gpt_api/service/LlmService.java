@@ -26,7 +26,7 @@ public class LlmService {
     }
 
     /**
-     * Envia o prompt do estudante para o LLM externo (Gemini) e retorna a resposta.
+     * Envia o prompt do estudante para o LLM externo (Gemini) e retorna a resposta.sss
      * @param prompt A pergunta do estudante.
      * @return A resposta gerada pelo LLM.
      */
