@@ -10,7 +10,7 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: iscool-gpt-api
   ECS_CLUSTER: iscool-gpt-cluster
-  ECS_SERVICE: iscool-gpt-service
+  ECS_SERVICE: iscool-gpt-task-definition-service
   ECS_TASK_DEFINITION: task-definition.json
   CONTAINER_NAME: iscool-gpt-api
 
