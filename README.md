@@ -1,69 +1,110 @@
-# 📚 IsCoolGPT: Assistente Inteligente de Estudos em Cloud
+***
 
-Este repositório contém o backend do **IsCoolGPT**, um assistente inteligente de estudos em Cloud Computing, desenvolvido com arquitetura cloud moderna e seguindo boas práticas de DevOps.
+# IsCoolGPT: Assistente de Estudos em Cloud
 
-O projeto utiliza um **Modelo de Linguagem Avançado (LLM)** externo para auxiliar estudantes em suas disciplinas.
+**Autor:** Victor  
+**Projeto:** Projeto Final Cloud 25.2
 
------
+***
 
-## 🛠️ Fase 1: Stack de Desenvolvimento e Containerização
+## 1. Visão Geral
 
-A Fase 1 se concentrou no desenvolvimento da API e na preparação do ambiente para implantação.
+O **IsCoolGPT** é um assistente educacional inteligente focado em Cloud Computing, DevOps e desenvolvimento de software.  
+A solução foi implementada como uma API RESTful, utilizando uma arquitetura serverless moderna na AWS, com pipeline de integração e entrega contínua (CI/CD) totalmente automatizado.
 
-### Backend & Tecnologias
+- A API se conecta ao Google Gemini para gerar respostas, aplicando guardrails (via system prompt) e temperatura controlada (0.2) para garantir respostas precisas e focadas no tópico de estudos.
 
-| Área | Tecnologia | Propósito |
-| :--- | :--- | :--- |
-| **Linguagem** | Java 21 | Linguagem de desenvolvimento.|
-| **Framework** | Spring Boot (com WebFlux) | Construção da API REST e comunicação assíncrona com o LLM. |
-| **Monitoramento** | Spring Boot Actuator | Fornece *endpoints* de saúde (`/actuator/health`) essenciais para orquestração (ECS)198, |
-| **Documentação** | Swagger/OpenAPI (Springdoc) |Documentação clara e interativa da API. |
-| **Containerização** | Docker | Garante a portabilidade e a consistência da API em todos os ambientes. |
+***
 
-### Arquivos Chave da API
+## 2. Diagrama de Arquitetura do Sistema
 
-  * **`pom.xml`**: Contém todas as dependências do Spring Boot, Actuator e Swagger.
-  * **`Dockerfile`**: Utiliza **multi-stage builds** para criar uma imagem final otimizada, garantindo menor tamanho e melhor performance.
-  * **`application.properties`**: Configurações de ambiente, onde a chave de API do LLM (`llm.api.key`) é lida como uma variável de ambiente, seguindo a boa prática de não armazenar segredos no código.
+**Fluxo do Usuário (Aplicação):**
+```
+Estudante → (1) Pergunta (Texto) → API Java Spring Boot (AWS ECS Fargate)
+API → (2) Envia Prompt (JSON) → Google Gemini API
+Gemini API → (3) Retorna Resposta (JSON) → API
+API → (4) Resposta (String) → Estudante
+```
 
------
+**Fluxo de DevOps (CI/CD):**
+```
+Desenvolvedor → (1) git push (master) → GitHub (Repositório)
+GitHub → (2) Aciona Pipeline → GitHub Actions (CI/CD)
+Actions → (3) Roda Testes → Maven Test
+Actions → (4) Build & Push da Imagem → AWS ECR (Registro de Imagem)
+Actions → (5) Atualiza Serviço → AWS ECS (Dispara Deploy)
+ECS → (6) Puxa Imagem → AWS ECR
+ECS → (7) Roda Nova Task → AWS Fargate
+Fargate → (8) Envia Logs → CloudWatch Logs (Monitoramento)
+```
 
-## 🚀 Como Executar a Aplicação (Docker)
+***
 
-Para executar o IsCoolGPT, você deve construir a imagem Docker e passá-la para o container, injetando a chave de API como uma variável de ambiente.
+## 3. Stack de Tecnologias e Decisões
 
-### 1\. Construir a Imagem
+| Componente          | Tecnologia Escolhida         | Justificativa                                                                                                         |
+|---------------------|-----------------------------|----------------------------------------------------------------------------------------------------------------------|
+| Backend (API)       | Java 21 + Spring Boot       | Framework robusto e maduro para APIs RESTful, focando em desafios de Cloud e DevOps.                                 |
+| LLM (IA)            | Google Gemini API           | API flexível, performática e de baixo custo, com autenticação via API Key.                                           |
+| Containerização     | Docker                      | Portabilidade e consistência do ambiente da aplicação.                                                               |
+| Otimização          | Multi-stage Builds          | Dockerfile em dois estágios para criar uma imagem leve, segura e rápida.                                             |
+| CI/CD               | GitHub Actions              | Pipeline automatizado de build, teste e deploy a cada push na branch master.                                         |
+| Registro de Imagem  | AWS ECR                     | Serviço gerenciado e seguro, integrado ao ECS.                                                                      |
+| Orquestração        | AWS ECS + Fargate           | Orquestração serverless sem precisar gerenciar servidores.                                                           |
+| Segurança           | IAM (Policies e Roles)      | Princípio do Menor Privilégio: 1) Usuário IAM para o GitHub Actions (ECR/ECS) 2) Role IAM para o ECS (ECR/CloudWatch)|
+| Monitoramento       | AWS CloudWatch Logs         | Logs da aplicação enviados direto do Fargate para o CloudWatch.                                                      |
+| Documentação        | Swagger/OpenAPI             | Interface interativa e auto-documentada (/swagger-ui.html).                                                          |
+| Health Check        | Spring Boot Actuator        | Endpoint /actuator/health para monitoramento do ECS.                                                                 |
 
-Este comando constrói a imagem Docker usando o `Dockerfile` otimizado:
+***
+
+## 4. Como Executar Localmente (Docker)
+
+**Pré-requisitos:**  
+- Ter o Docker instalado  
+- Possuir uma chave de API do Google Gemini
+
+### 4.1 Construir a Imagem Docker
+
+No diretório raiz do projeto:
 
 ```bash
-docker build -t iscoolgpt:prerelease .
+docker build -t iscoolgpt:local .
 ```
 
-### 2\. Executar o Contêiner
+### 4.2 Executar o Contêiner
 
-Este comando inicia o contêiner na porta `8080`, injetando a chave de API do LLM (`LLM_API_KEY`) necessária para a aplicação funcionar.
+Execute o contêiner, mapeando a porta 8080 e injetando a key:
 
 ```bash
-docker run -p 8080:8080 -e LLM_API_KEY="CHAVE_DE_TESTE_AQUI" iscoolgpt:prerelease
+# Substitua "SUA_CHAVE_GEMINI_AQUI" pela sua chave real
+docker run -p 8080:8080 -e LLM_API_KEY="SUA_CHAVE_GEMINI_AQUI" iscoolgpt:local
 ```
 
-### 3\. Testar o Health Check
+***
 
-Com o contêiner rodando, verifique se a aplicação está ativa via Actuator:
+## 5. Como Usar a API (Endpoints)
+
+### Endpoint principal
+
+- **POST /api/v1/iscool/ask**
+
+Aceita uma String (texto puro) no body e retorna a resposta do assistente como texto.
+
+**Exemplo de chamada cURL:**
 
 ```bash
-curl http://localhost:8080/actuator/health
+curl -X POST http://localhost:8080/api/v1/iscool/ask \
+     -H "Content-Type: text/plain" \
+     -d "O que é AWS Fargate e por que ele é usado no ECS?"
 ```
 
-**Resultado Esperado:** `{"status":"UP"}`
+### Endpoints adicionais
 
-### 4\. Acessar a Documentação
+- **Health Check:**  
+  GET `/actuator/health`
 
-Você pode explorar todos os *endpoints* através da interface interativa do Swagger:
+- **Documentação da API:**  
+  GET `/swagger-ui.html`
 
-```
-http://localhost:8080/swagger-ui.html
-```
-
------
+***
